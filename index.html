@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>인세인 캐릭터시트</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo&display=swap">
+<style>
+  body { font: 14px sans-serif; margin: 0; display: flex; height: 100vh }
+  #side { width: 460px; overflow-y: auto; padding: 8px; box-sizing: border-box; border-right: 1px solid #ccc }
+  #view { flex: 1; overflow: auto; padding: 8px }
+  #c { width: 100%; height: auto; box-shadow: 0 0 4px #999 }
+  .bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px }
+  fieldset { margin: 0 0 8px; display: grid; gap: 4px }
+  label { display: flex; gap: 4px; align-items: center }
+  input:not([type=checkbox]), select, textarea { flex: 1; min-width: 0; font: inherit }
+  .skills { border-collapse: collapse; font-size: 12px; white-space: nowrap }
+  .skills td, .skills th { padding: 0 2px }
+  .ab { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding-bottom: 6px; border-bottom: 1px dashed #ccc }
+  .ab textarea { grid-column: span 2 }
+  [hidden] { display: none !important }
+  .row { display: flex; gap: 4px; align-items: center }
+  @page { size: A4 landscape; margin: 0 }
+  @media print {
+    #side { display: none }
+    body, #view { display: block; height: auto; padding: 0; overflow: visible }
+    #c { width: 100%; box-shadow: none }
+  }
+</style>
+<div id="side">
+  <div class="bar">
+    <button id="print">인쇄 / PDF 저장</button>
+    <button id="export">JSON 내보내기</button>
+    <label><input id="import" type="file" accept=".json" hidden><u>JSON 불러오기</u></label>
+    <button id="reset">초기화</button>
+  </div>
+  <form id="f" onsubmit="return false"></form>
+</div>
+<div id="view"><canvas id="c" width="2047" height="1340"></canvas></div>
+<script src="abilities.js"></script>
+<script src="app.js"></script>
+</html>
