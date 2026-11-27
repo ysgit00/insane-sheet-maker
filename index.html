@@ -45,6 +45,7 @@
   .f:has(textarea) { align-items: start }
   .f:has(textarea) > span { padding-top: 6px }
   .row { display: flex; gap: 14px; align-items: center }
+  .hint { color: var(--mute); font-size: 13px }
 
   .chip { position: relative; gap: 0; color: var(--sub); cursor: pointer; white-space: nowrap; user-select: none }
   .chip:hover { color: var(--fg) }
@@ -65,7 +66,7 @@
   .stepper button:hover { border-color: var(--fg) }
   .worlds { display: flex; flex-wrap: wrap; gap: 4px 18px }
 
-  .skills { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px }
+  .skills { width: 100%; margin-top: 8px; border-collapse: collapse; table-layout: fixed; font-size: 13px }
   .skills th { padding-bottom: 6px; font: 700 14px "Nanum Myeongjo", serif; border-bottom: 1px solid var(--fg) }
   .skills td { padding: 3px 0 }
   .skills .chip { justify-content: center; color: #525252 }
@@ -106,7 +107,7 @@
   <div class="bar">
     <button id="print">PDF 저장</button>
     <button id="export">시트 저장</button>
-    <label class="btn"><input id="import" type="file" accept=".json" hidden>시트 열기</label>
+    <label class="btn"><input id="import" type="file" hidden>시트 열기</label>
     <button id="reset">초기화</button>
   </div>
   <form id="f" onsubmit="return false"></form>

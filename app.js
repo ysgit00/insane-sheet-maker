@@ -269,7 +269,7 @@ function build() {
     cb.onchange = () => { applyRename(); AB_Y.forEach((_, i) => refreshPick(i)); update(); };
     return h('label', { className: 'chip' }, cb, w);
   }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 불러오거나 아래에서 직접 입력하세요.');
-  const customIn = input('', { type: 'file', accept: '.json', multiple: true, hidden: true });
+  const customIn = input('', { type: 'file', multiple: true, hidden: true });
   customIn.onchange = async () => {
     const stored = loadPacks();
     try {
@@ -301,9 +301,10 @@ function build() {
 
   const portraitIn = input('', { type: 'file', accept: 'image/*', hidden: true });
   portraitIn.onchange = () => loadPortrait(portraitIn.files[0]);
-  form.append(section('초상화', h('div', { className: 'row' },
-    h('label', { className: 'btn' }, portraitIn, '이미지 선택'),
-    h('button', { type: 'button', onclick: () => setPortrait('') }, '삭제'))));
+  form.append(section('이미지', h('div', { className: 'row' },
+    h('label', { className: 'btn' }, portraitIn, '파일 선택'),
+    h('button', { type: 'button', onclick: () => setPortrait('') }, '삭제'),
+    h('span', { className: 'hint' }, '1:1 비율 권장'))));
 
   const grid = h('table', { className: 'skills' }, h('tr', {}, ...CATS.map((c) => h('th', { 'data-k': c }, c))));
   SKILLS[0].forEach((_, i) => grid.append(h('tr', {}, ...CATS.map((_, c) =>
@@ -449,9 +450,12 @@ function loadPortrait(file) {
   img.onload = () => {
     const s = Math.min(1, (PORTRAIT[2] * 1.5) / img.width, (PORTRAIT[3] * 1.5) / img.height);
     const c = h('canvas', { width: img.width * s, height: img.height * s });
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const cx = c.getContext('2d');
+    cx.drawImage(img, 0, 0, c.width, c.height);
     URL.revokeObjectURL(img.src);
-    setPortrait(c.toDataURL('image/jpeg', 0.85));
+    // 투명 픽셀이 있으면 PNG 로 보관 (JPEG 는 투명 부분이 검게 됨)
+    const alpha = cx.getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 === 3 && v < 255);
+    setPortrait(alpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.85));
   };
   img.src = URL.createObjectURL(file);
 }
@@ -475,7 +479,7 @@ $('#export').onclick = () => {
 };
 $('#import').onchange = async (e) => {
   const f = e.target.files[0];
-  if (f) write(JSON.parse(await f.text()));
+  if (f) try { write(JSON.parse(await f.text())); } catch { alert('시트 파일(JSON)이 아닙니다.'); }
   e.target.value = '';
   update();
 };
