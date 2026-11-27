@@ -83,6 +83,18 @@
   .person > select { flex: none; width: 44px }
   [hidden] { display: none !important }
 
+  @media screen and (max-width: 900px) {
+    body { flex-direction: column; height: auto; overflow: visible }
+    #side { width: 100%; overflow: visible; border-right: 0 }
+    .bar { position: static; padding: 12px 16px }
+    form { padding: 0 16px 32px }
+    #view { order: -1; position: sticky; top: 0; z-index: 2; padding: 8px; overflow: visible;
+      background: var(--bg); border-bottom: 1px solid var(--line) }
+    .skills { font-size: 12px }
+    .gauge { font-size: 13px }
+    .gauge .chip { width: 21px; height: 21px }
+  }
+
   @page { size: A4 landscape; margin: 0 }
   @media print {
     #side { display: none }
