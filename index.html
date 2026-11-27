@@ -20,6 +20,8 @@
   .ab textarea { grid-column: span 2 }
   [hidden] { display: none !important }
   .row { display: flex; gap: 4px; align-items: center }
+  .worlds { display: flex; flex-wrap: wrap; gap: 2px 12px }
+  .worlds label { white-space: nowrap }
   @page { size: A4 landscape; margin: 0 }
   @media print {
     #side { display: none }
@@ -37,6 +39,5 @@
   <form id="f" onsubmit="return false"></form>
 </div>
 <div id="view"><canvas id="c" width="2047" height="1340"></canvas></div>
-<script src="abilities.js"></script>
 <script src="app.js"></script>
 </html>

@@ -45,6 +45,15 @@ const form = $('#f');
 const bg = new Image();
 const portrait = new Image();
 let abilities = {};
+let worlds = [];
+const CUSTOM_KEY = 'insane-custom';
+// 업로드 데이터 형식: 월드세팅 하나당 파일 하나
+const TEMPLATE = {
+  world: '내 월드세팅',
+  abilities: {
+    '어빌리티 이름': { type: '공격', skill: '폭력, 의학', effect: '효과 텍스트. type 은 공격/서포트/장비. skill 은 특기명/분야명/임의/없음을 쉼표로 나열' },
+  },
+};
 
 // ---------- 그리기 ----------
 function text(s, x, y, size = 26) {
@@ -207,10 +216,41 @@ const select = (name, opts) => h('select', { name }, ...['', ...opts].map((o) =>
 const field = (label, el) => h('label', {}, label, el);
 const section = (title, ...kids) => h('fieldset', {}, h('legend', {}, title), ...kids);
 // 분야별로 묶은 특기 드롭다운
-const skillSelect = (name, empty = '-') => h('select', { name }, new Option(empty, ''),
+const skillSelect = (name, empty = '-', ...extra) => h('select', { name }, new Option(empty, ''), ...extra.map((o) => new Option(o)),
   ...CATS.map((c, i) => h('optgroup', { label: c }, ...SKILLS[i].map((s) => new Option(s)))));
 
 function build() {
+  const worldBox = h('div', { className: 'worlds' }, ...worlds.map((w) => {
+    const cb = input(`world_${w}`, { type: 'checkbox' });
+    cb.defaultChecked = w === worlds[0];
+    cb.onchange = () => AB_Y.forEach((_, i) => refreshPick(i));
+    return h('label', {}, cb, w);
+  }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 아래에서 불러오거나 직접 입력하세요.');
+  const customIn = input('', { type: 'file', accept: '.json', multiple: true, hidden: true });
+  customIn.onchange = async () => {
+    const stored = loadPacks();
+    try {
+      for (const f of customIn.files) {
+        const c = JSON.parse(await f.text());
+        for (const p of [c].flat()) {
+          if (typeof p.world !== 'string' || typeof p.abilities !== 'object') throw f.name;
+          stored[p.world] = p.abilities;
+        }
+      }
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify(stored));
+      location.reload();
+    } catch (e) { alert(`형식이 올바르지 않습니다: ${e}\n템플릿을 참고해 주세요.`); }
+    customIn.value = '';
+  };
+  form.append(section('월드세팅', worldBox, h('div', { className: 'row' },
+    h('label', {}, customIn, h('u', {}, '데이터 불러오기')),
+    h('button', { type: 'button', onclick: () => download(TEMPLATE, 'world-template.json') }, '템플릿'),
+    h('button', { type: 'button', hidden: !localStorage.getItem(CUSTOM_KEY), onclick: () => {
+      if (!confirm('불러온 월드세팅/어빌리티를 모두 삭제할까요?')) return;
+      localStorage.removeItem(CUSTOM_KEY);
+      location.reload();
+    } }, '데이터 삭제'))));
+
   form.append(section('기본', ...BASIC.map((f) => field(f.label, input(f.k)))));
 
   const portraitIn = input('', { type: 'file', accept: 'image/*' });
@@ -233,11 +273,10 @@ function build() {
   form.append(section('어빌리티',
     field('기본공격 지정특기', skillSelect('basic_skill')),
     ...AB_Y.map((_, i) => {
-      const pick = select(`ab${i}_pick`, Object.keys(abilities));
-      pick.add(new Option('직접 입력', CUSTOM));
+      const pick = h('select', { name: `ab${i}_pick` });
       pick.onchange = () => fillAbility(i, pick.value);
       return h('div', { className: 'ab' }, pick,
-        skillSelect(`ab${i}_skill`, '지정특기'),
+        skillSelect(`ab${i}_skill`, '지정특기', '없음'),
         input(`ab${i}_name`, { placeholder: '이름' }),
         select(`ab${i}_type`, Object.keys(TYPES)),
         h('textarea', { name: `ab${i}_effect`, placeholder: '효과', rows: 2 }));
@@ -260,25 +299,51 @@ function build() {
 
 const CUSTOM = '__custom';
 const abField = (i, n) => form.elements[`ab${i}_${n}`];
+const worldOf = (key) => abilities[key]?.world || worlds[0];
+// 지정특기 표기: 특기명 / 분야명(그 분야 아무거나) / 임의 / 없음, 쉼표로 여러 개
+const allowed = (spec = '임의') => spec.split(',').flatMap((t) => {
+  t = t.trim();
+  const c = CATS.indexOf(t);
+  return t === '임의' ? SKILLS.flat() : c >= 0 ? SKILLS[c] : [t];
+});
+
+// 선택한 월드세팅의 어빌리티만 월드세팅별로 묶어 표시. 범위 밖이 된 기존 선택값은 유지
+function refreshPick(i, keep = abField(i, 'pick').value) {
+  const pick = abField(i, 'pick');
+  const on = worlds.filter((w) => form.elements[`world_${w}`].checked);
+  const keys = Object.keys(abilities);
+  pick.replaceChildren(new Option('-', ''),
+    ...on.map((w) => h('optgroup', { label: w }, ...keys.filter((k) => worldOf(k) === w).map((k) => new Option(k)))));
+  if (keep in abilities && !on.includes(worldOf(keep))) pick.add(new Option(`${keep} (범위 밖)`, keep));
+  pick.add(new Option('직접 입력', CUSTOM));
+  pick.value = keep;
+  syncAbility(i);
+}
 
 // 목록에서 고르면 값만 채우고 입력창은 숨김. '직접 입력'이면 모두 보임 (직전 값 유지)
 function fillAbility(i, key) {
   const a = abilities[key];
   if (key !== CUSTOM) {
-    abField(i, 'name').value = a ? key : '';
+    abField(i, 'name').value = a ? a.name || key : '';
     abField(i, 'type').value = a?.type || '';
-    abField(i, 'skill').value = a && a.skill !== '임의' ? a.skill || '' : '';
+    const opts = a ? allowed(a.skill) : [];
+    abField(i, 'skill').value = opts.length === 1 ? opts[0] : '';
     abField(i, 'effect').value = a?.effect || '';
   }
   syncAbility(i);
-  if (a?.skill === '임의' || key === CUSTOM) abField(i, key === CUSTOM ? 'name' : 'skill').focus();
+  if ((a && allowed(a.skill).length > 1) || key === CUSTOM) abField(i, key === CUSTOM ? 'name' : 'skill').focus();
   update();
 }
 
 function syncAbility(i) {
   const key = abField(i, 'pick').value, custom = key === CUSTOM;
   for (const n of ['name', 'type', 'effect']) abField(i, n).hidden = !custom;
-  abField(i, 'skill').hidden = !custom && abilities[key]?.skill !== '임의';
+  const a = abilities[key], skill = abField(i, 'skill');
+  const opts = custom ? null : a ? allowed(a.skill) : [];
+  skill.hidden = !!opts && opts.length <= 1;
+  // 지정특기 후보만 남김
+  for (const o of skill.options) o.hidden = !!opts && !!o.value && !opts.includes(o.value);
+  for (const g of skill.querySelectorAll('optgroup')) g.hidden = [...g.children].every((o) => o.hidden);
 }
 
 // ---------- 상태 / 저장 ----------
@@ -300,9 +365,8 @@ function write(d) {
     else el.value = d[el.name];
   }
   AB_Y.forEach((_, i) => {
-    const pick = abField(i, 'pick');
-    if (!pick.value && abField(i, 'name').value) pick.value = abField(i, 'name').value in abilities ? abField(i, 'name').value : CUSTOM;
-    syncAbility(i);
+    const name = abField(i, 'name').value;
+    refreshPick(i, d[`ab${i}_pick`] || (name ? (name in abilities ? name : CUSTOM) : ''));
   });
   setPortrait(d.portrait || '');
 }
@@ -332,14 +396,22 @@ function loadPortrait(file) {
   img.src = URL.createObjectURL(file);
 }
 
-$('#export').onclick = () => {
-  const d = read();
+function loadPacks() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_KEY)) || {}; } catch { return {}; }
+}
+
+function download(data, filename) {
   const a = h('a', {
-    href: URL.createObjectURL(new Blob([JSON.stringify(d)], { type: 'application/json' })),
-    download: `${d.name || 'character'}.json`,
+    href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })),
+    download: filename,
   });
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+$('#export').onclick = () => {
+  const d = read();
+  download(d, `${d.name || 'character'}.json`);
 };
 $('#import').onchange = async (e) => {
   const f = e.target.files[0];
@@ -350,20 +422,28 @@ $('#import').onchange = async (e) => {
 $('#reset').onclick = () => {
   if (!confirm('모든 입력을 지울까요?')) return;
   form.reset();
-  AB_Y.forEach((_, i) => syncAbility(i));
+  AB_Y.forEach((_, i) => refreshPick(i, ''));
   setPortrait('');
 };
 $('#print').onclick = () => window.print();
 
 // ---------- 시작 ----------
 (() => {
-  abilities = typeof ABILITIES === 'object' ? ABILITIES : {};
+  const packs = Object.entries(loadPacks()).map(([world, abilities]) => ({ world, abilities }));
+  for (const p of packs) {
+    if (!worlds.includes(p.world)) worlds.push(p.world);
+    for (const [k, v] of Object.entries(p.abilities)) {
+      // 다른 월드세팅에 같은 이름이 있으면 목록 키에 월드세팅을 붙여 구분
+      const key = abilities[k] && abilities[k].world !== p.world ? `${k} (${p.world})` : k;
+      abilities[key] = { name: k, ...v, world: p.world };
+    }
+  }
   build();
   form.oninput = update;
   bg.onload = portrait.onload = draw;
   bg.src = 'sheet.jpg';
   const saved = localStorage.getItem(KEY);
   if (saved) write(JSON.parse(saved));
-  else AB_Y.forEach((_, i) => syncAbility(i));
+  else AB_Y.forEach((_, i) => refreshPick(i, ''));
   draw();
 })();
