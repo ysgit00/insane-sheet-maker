@@ -1,6 +1,7 @@
 // 좌표는 모두 sheet.jpg(2047x1340) 픽셀 기준
 const W = 2047, H = 1340;
 const FONT = "'Nanum Myeongjo', serif";
+const HEAD_FONT = `800 {}px ${FONT}`; // 분야 머리글
 const CATS = ['폭력', '정서', '지각', '기술', '지식', '괴이'];
 const SKILLS = [
   ['소각', '고문', '포박', '협박', '파괴', '구타', '절단', '찌르기', '사격', '전쟁', '매장'],
@@ -36,6 +37,8 @@ const HP_X = [330, 367, 403, 440, 475, 512, 548, 585, 620, 668, 722, 777];
 const HP_Y = { hp: 802, san: 855 };
 const PEOPLE_Y = [975, 1020, 1065, 1110, 1155, 1200, 1242];
 const ITEMS = [['painkiller', '진통제', 935], ['weapon', '무기', 1013], ['charm', '부적', 1097]];
+// 분야 머리글 글자 시작 x (글자 세로 84~122)
+const CAT_TEXT = [949, 1114, 1280, 1448, 1610, 1775];
 const PORTRAIT = [315, 72, 485, 488];
 const KEY = 'insane-sheet';
 
@@ -46,9 +49,14 @@ const bg = new Image();
 const portrait = new Image();
 let abilities = {};
 let worlds;
+// 월드세팅별 특기/분야 이름 변경. rn 은 체크된 월드세팅을 합친 것
+const renames = {};
+let rn = {};
+const nm = (s) => rn[s] || s;
 const CUSTOM_KEY = 'insane-custom';
 const TEMPLATE = {
   world: '내 월드세팅',
+  rename: { '원래 특기명/분야명': '바뀐 이름' },
   abilities: {
     '어빌리티 이름': { type: '공격', skill: '폭력, 의학', effect: '효과 텍스트. type 은 공격/서포트/장비. skill 은 특기명/분야명/임의/없음을 쉼표로 나열' },
   },
@@ -76,11 +84,11 @@ function wrapLines(s, w) {
 // 세 줄 이상이면 줄 간격을 좁혀 글씨를 덜 줄임
 const lhf = (lines) => (lines.length > 2 ? 1 : 1.15);
 
-function fitText(s, x, y, w, h, max = 20, min = 9, top = false, center = false, bold = false) {
+function fitText(s, x, y, w, h, max = 20, min = 9, top = false, center = false, bold = false, font = `${bold ? 'bold ' : ''}{}px ${FONT}`) {
   if (!s) return;
   let size = max, lines;
   for (; size >= min; size--) {
-    ctx.font = `${bold ? 'bold ' : ''}${size}px ${FONT}`;
+    ctx.font = font.replace('{}', size);
     lines = wrapLines(s, w);
     if (lines.length * size * lhf(lines) <= h) break;
   }
@@ -119,17 +127,40 @@ function check(x, y) {
 // 웹폰트는 글자 범위별로 나눠 받으므로, 캔버스에 쓸 글자를 미리 로드한 뒤 다시 그린다
 const loadedChars = new Set();
 function ensureFont(d) {
-  const chars = [...new Set(Object.values(d).filter((v) => typeof v === 'string' && !v.startsWith('data:')).join(''))]
+  const chars = [...new Set([...Object.values(d), ...Object.values(rn)].filter((v) => typeof v === 'string' && !v.startsWith('data:')).join(''))]
     .filter((ch) => !loadedChars.has(ch));
   if (!chars.length || !document.fonts) return;
   chars.forEach((ch) => loadedChars.add(ch));
   const text = chars.join('');
-  Promise.all([document.fonts.load(`20px ${FONT}`, text), document.fonts.load(`bold 20px ${FONT}`, text)]).then(draw, () => {});
+  Promise.all([document.fonts.load(`20px ${FONT}`, text), document.fonts.load(`bold 20px ${FONT}`, text), document.fonts.load(HEAD_FONT.replace('{}', 20), text)]).then(draw, () => {});
 }
 
 function drawSkill(s, y) {
   const [l, r] = SKILL_CELL;
-  fitText(s, l, y - 18, r - l, 38, 30, 14, false, true);
+  fitText(nm(s), l, y - 18, r - l, 38, 30, 14, false, true);
+}
+
+// 인쇄된 이름을 흰색으로 가리고 바뀐 이름을 그림
+function drawRenames() {
+  CATS.forEach((cat, c) => {
+    if (rn[cat]) {
+      const l = CAT_TEXT[c] - 4, r = (GAP_X[c + 1] || [1880])[0] - 4;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(l, 80, r - l, 46);
+      ctx.fillStyle = '#000';
+      fitText(rn[cat], l + 4, 82, r - l - 4, 42, 44, 20, false, false, false, HEAD_FONT);
+    }
+    SKILLS[c].forEach((name, i) => {
+      if (!rn[name]) return;
+      const l = STAR_X[c] + 18, r = CELL_X[c][1] - 1, t = CELL_Y[i] + 3;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(l, t, r - l, CELL_Y[i + 1] - 2 - t);
+      ctx.fillStyle = '#000';
+      // 인쇄된 이름과 같은 중심에 맞춤
+      const cx = STAR_X[c] + NAME_DX[c], hw = Math.min(cx - l, r - cx);
+      fitText(rn[name], cx - hw, t + 2, hw * 2, CELL_Y[i + 1] - 2 - t, 25, 14, false, true);
+    });
+  });
 }
 
 function draw() {
@@ -137,7 +168,7 @@ function draw() {
   ensureFont(d);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, W, H);
-  if (bg.naturalWidth) ctx.drawImage(bg, 0, 0, W, H);
+  if (bg.naturalWidth) { ctx.drawImage(bg, 0, 0, W, H); drawRenames(); }
   if (d.portrait && portrait.naturalWidth) {
     const [x, y, w, h] = PORTRAIT, s = Math.min(w / portrait.width, h / portrait.height);
     const pw = portrait.width * s, ph = portrait.height * s;
@@ -168,13 +199,13 @@ function draw() {
         ctx.restore();
       } else {
         ctx.font = `28px ${FONT}`;
-        ellipse(x + NAME_DX[c], y, ctx.measureText(name).width / 2 + 10, 16);
+        ellipse(x + NAME_DX[c], y, ctx.measureText(nm(name)).width / 2 + 10, 16);
       }
     }
     if (d.fear === name) star(x + 1, y, 13);
   }));
-  if (d.curiosity) text(d.curiosity, 960, 565, 30);
-  if (d.fear) text(d.fear, 1380, 565, 30);
+  if (d.curiosity) text(nm(d.curiosity), 960, 565, 30);
+  if (d.fear) text(nm(d.fear), 1380, 565, 30);
 
   for (const k in HP_Y) {
     const v = +d[k];
@@ -212,6 +243,7 @@ const h = (tag, attrs = {}, ...kids) => {
   return el;
 };
 const input = (name, attrs = {}) => h('input', { name, ...attrs });
+const opt = (k) => h('option', { value: k, 'data-k': k }, nm(k));
 const select = (name, opts) => h('select', { name }, ...['', ...opts].map((o) => new Option(o || '-', o)));
 const radio = (name, value, label, checked) => {
   const el = input(name, { type: 'radio', value });
@@ -228,13 +260,13 @@ const stepper = (name, max) => {
 const field = (label, el) => h('label', { className: 'f' }, h('span', {}, label), el);
 const section = (title, ...kids) => h('section', {}, h('h2', {}, title), ...kids);
 const skillSelect = (name, empty = '-', ...extra) => h('select', { name }, new Option(empty, ''), ...extra.map((o) => new Option(o)),
-  ...CATS.map((c, i) => h('optgroup', { label: c }, ...SKILLS[i].map((s) => new Option(s)))));
+  ...CATS.map((c, i) => h('optgroup', { label: nm(c), 'data-k': c }, ...SKILLS[i].map(opt))));
 
 function build() {
   const worldBox = h('div', { className: 'worlds' }, ...worlds.map((w) => {
     const cb = input(`world_${w}`, { type: 'checkbox' });
     cb.defaultChecked = w === worlds[0];
-    cb.onchange = () => AB_Y.forEach((_, i) => refreshPick(i));
+    cb.onchange = () => { applyRename(); AB_Y.forEach((_, i) => refreshPick(i)); update(); };
     return h('label', { className: 'chip' }, cb, w);
   }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 불러오거나 아래에서 직접 입력하세요.');
   const customIn = input('', { type: 'file', accept: '.json', multiple: true, hidden: true });
@@ -245,7 +277,7 @@ function build() {
         const c = JSON.parse(await f.text());
         for (const p of [c].flat()) {
           if (typeof p.world !== 'string' || typeof p.abilities !== 'object') throw f.name;
-          stored[p.world] = p.abilities;
+          stored[p.world] = { abilities: p.abilities, rename: p.rename };
         }
       }
       localStorage.setItem(CUSTOM_KEY, JSON.stringify(stored));
@@ -273,13 +305,13 @@ function build() {
     h('label', { className: 'btn' }, portraitIn, '이미지 선택'),
     h('button', { type: 'button', onclick: () => setPortrait('') }, '삭제'))));
 
-  const grid = h('table', { className: 'skills' }, h('tr', {}, ...CATS.map((c) => h('th', {}, c))));
+  const grid = h('table', { className: 'skills' }, h('tr', {}, ...CATS.map((c) => h('th', { 'data-k': c }, c))));
   SKILLS[0].forEach((_, i) => grid.append(h('tr', {}, ...CATS.map((_, c) =>
-    h('td', {}, h('label', { className: 'chip' }, input(`sk_${c}_${i}`, { type: 'checkbox' }), SKILLS[c][i]))))));
+    h('td', {}, h('label', { className: 'chip' }, input(`sk_${c}_${i}`, { type: 'checkbox' }), h('span', { 'data-k': SKILLS[c][i] })))))));
   const mark = h('div', { className: 'row' },
     radio('skill_mark', 'circle', '이름에 동그라미', true), radio('skill_mark', 'fill', '칸 색칠'));
   form.append(section('특기', field('습득 표시', mark), grid,
-    field('호기심', select('curiosity', CATS)),
+    field('호기심', h('select', { name: 'curiosity' }, new Option('-', ''), ...CATS.map(opt))),
     field('공포심', skillSelect('fear'))));
 
   // 다시 누르면 선택 해제
@@ -321,8 +353,10 @@ const CUSTOM = '__custom';
 const abField = (i, n) => form.elements[`ab${i}_${n}`];
 const worldOf = (key) => abilities[key]?.world || worlds[0];
 // 지정특기 표기: 특기명 / 분야명(그 분야 아무거나) / 임의 / 없음, 쉼표로 여러 개
+// 바뀐 이름으로 적힌 지정특기는 원래 이름으로 되돌림
+const orig = (t) => Object.values(renames).flatMap(Object.entries).find(([, v]) => v === t)?.[0] || t;
 const allowed = (spec = '임의') => spec.split(',').flatMap((t) => {
-  t = t.trim();
+  t = orig(t.trim());
   const c = CATS.indexOf(t);
   return t === '임의' ? SKILLS.flat() : c >= 0 ? SKILLS[c] : [t];
 });
@@ -355,6 +389,11 @@ function fillAbility(i, key) {
   update();
 }
 
+function applyRename() {
+  rn = Object.assign({}, ...worlds.filter((w) => form.elements[`world_${w}`].checked).map((w) => renames[w]));
+  for (const el of form.querySelectorAll('[data-k]')) el[el.tagName === 'OPTGROUP' ? 'label' : 'textContent'] = nm(el.dataset.k);
+}
+
 function syncAbility(i) {
   const key = abField(i, 'pick').value, custom = key === CUSTOM;
   for (const n of ['name', 'type', 'effect']) abField(i, n).hidden = !custom;
@@ -384,6 +423,7 @@ function write(d) {
     else if (el.type === 'checkbox') el.checked = !!d[el.name];
     else el.value = d[el.name];
   }
+  applyRename();
   AB_Y.forEach((_, i) => {
     const name = abField(i, 'name').value;
     refreshPick(i, d[`ab${i}_pick`] || (name ? (name in abilities ? name : CUSTOM) : ''));
@@ -442,6 +482,7 @@ $('#import').onchange = async (e) => {
 $('#reset').onclick = () => {
   if (!confirm('모든 입력을 지울까요?')) return;
   form.reset();
+  applyRename();
   AB_Y.forEach((_, i) => refreshPick(i, ''));
   setPortrait('');
 };
@@ -451,7 +492,10 @@ $('#print').onclick = () => window.print();
   const packs = loadPacks();
   worlds = Object.keys(packs);
   for (const w of worlds) {
-    for (const [k, v] of Object.entries(packs[w])) {
+    // 예전 형식 {월드세팅: 어빌리티} 도 읽음
+    const p = packs[w].abilities ? packs[w] : { abilities: packs[w] };
+    renames[w] = p.rename || {};
+    for (const [k, v] of Object.entries(p.abilities)) {
       // 다른 월드세팅에 같은 이름이 있으면 목록 키에 월드세팅을 붙여 구분
       const key = abilities[k] && abilities[k].world !== w ? `${k} (${w})` : k;
       abilities[key] = { name: k, ...v, world: w };
@@ -463,6 +507,6 @@ $('#print').onclick = () => window.print();
   bg.src = 'sheet.jpg';
   const saved = localStorage.getItem(KEY);
   if (saved) write(JSON.parse(saved));
-  else AB_Y.forEach((_, i) => refreshPick(i, ''));
+  else { applyRename(); AB_Y.forEach((_, i) => refreshPick(i, '')); }
   draw();
 })();
