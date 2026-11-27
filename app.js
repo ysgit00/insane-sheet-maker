@@ -30,7 +30,7 @@ const BASIC = [
 const AB_Y = [751, 795, 840, 884];
 const BASIC_ATTACK_Y = 663;
 const AB_COL = { name: 843, effect: 1393 };
-const SKILL_CELL = [1262, 1386]; // 지정특기 칸 좌우
+const SKILL_CELL = [1262, 1386];
 const TYPES = { 공격: [1153, 17], 서포트: [1196, 23], 장비: [1237, 17] }; // 글자 중심 x, 가로 반지름 (실측)
 const HP_X = [330, 367, 403, 440, 475, 512, 548, 585, 620, 668, 722, 777];
 const HP_Y = { hp: 802, san: 855 };
@@ -45,9 +45,8 @@ const form = $('#f');
 const bg = new Image();
 const portrait = new Image();
 let abilities = {};
-let worlds = [];
+let worlds;
 const CUSTOM_KEY = 'insane-custom';
-// 업로드 데이터 형식: 월드세팅 하나당 파일 하나
 const TEMPLATE = {
   world: '내 월드세팅',
   abilities: {
@@ -55,7 +54,6 @@ const TEMPLATE = {
   },
 };
 
-// ---------- 그리기 ----------
 function text(s, x, y, size = 26) {
   ctx.font = `${size}px ${FONT}`;
   ctx.textBaseline = 'middle';
@@ -75,7 +73,6 @@ function wrapLines(s, w) {
   return out;
 }
 
-// 박스에 맞을 때까지 글자 크기를 줄여서 그림
 // 세 줄 이상이면 줄 간격을 좁혀 글씨를 덜 줄임
 const lhf = (lines) => (lines.length > 2 ? 1 : 1.15);
 
@@ -186,12 +183,10 @@ function draw() {
 
   drawSkill(d.basic_skill, BASIC_ATTACK_Y);
   AB_Y.forEach((y, i) => {
-    // 인쇄된 '기본공격'(약 32px)과 같은 크기, 굵게
     fitText(d[`ab${i}_name`], AB_COL.name + 5, y - 18, 285, 40, 32, 14, false, false, true);
     const t = TYPES[d[`ab${i}_type`]];
     if (t) ellipse(t[0], y + 4, t[1], 15);
     drawSkill(d[`ab${i}_skill`], y);
-    // 칸 경계(가로 1389~1932, 세로 줄 사이)에서 여백 2px
     fitText(d[`ab${i}_effect`], AB_COL.effect + 2, y - 18, 530, 40, 18);
   });
 
@@ -210,10 +205,9 @@ function draw() {
   fitText(d.reward, 1505, 1205, 390, 42, 18, 9, true);
 }
 
-// ---------- 폼 ----------
 const h = (tag, attrs = {}, ...kids) => {
   const el = document.createElement(tag);
-  for (const k in attrs) k in el && k !== 'list' ? (el[k] = attrs[k]) : el.setAttribute(k, attrs[k]);
+  for (const k in attrs) k in el ? (el[k] = attrs[k]) : el.setAttribute(k, attrs[k]);
   el.append(...kids);
   return el;
 };
@@ -224,7 +218,6 @@ const radio = (name, value, label, checked) => {
   el.defaultChecked = !!checked;
   return h('label', { className: 'chip' }, el, label);
 };
-// − 값 + 버튼으로 증감
 const stepper = (name, max) => {
   const el = input(name, { type: 'number', min: 0, max });
   const step = (d) => { el.value = Math.min(max, Math.max(0, (+el.value || 0) + d)) || ''; update(); };
@@ -234,7 +227,6 @@ const stepper = (name, max) => {
 };
 const field = (label, el) => h('label', { className: 'f' }, h('span', {}, label), el);
 const section = (title, ...kids) => h('section', {}, h('h2', {}, title), ...kids);
-// 분야별로 묶은 특기 드롭다운
 const skillSelect = (name, empty = '-', ...extra) => h('select', { name }, new Option(empty, ''), ...extra.map((o) => new Option(o)),
   ...CATS.map((c, i) => h('optgroup', { label: c }, ...SKILLS[i].map((s) => new Option(s)))));
 
@@ -243,7 +235,7 @@ function build() {
     const cb = input(`world_${w}`, { type: 'checkbox' });
     cb.defaultChecked = w === worlds[0];
     cb.onchange = () => AB_Y.forEach((_, i) => refreshPick(i));
-    return h('label', {}, cb, w);
+    return h('label', { className: 'chip' }, cb, w);
   }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 불러오거나 아래에서 직접 입력하세요.');
   const customIn = input('', { type: 'file', accept: '.json', multiple: true, hidden: true });
   customIn.onchange = async () => {
@@ -315,7 +307,7 @@ function build() {
     input(`p${i}_name`, { placeholder: '이름' }),
     h('label', { className: 'chip' }, input(`p${i}_home`, { type: 'checkbox' }), '거처'),
     h('label', { className: 'chip' }, input(`p${i}_secret`, { type: 'checkbox' }), '비밀'),
-    input(`p${i}_emo`, { placeholder: '감정', size: 6 }),
+    input(`p${i}_emo`, { placeholder: '감정', className: 'emo' }),
     select(`p${i}_sign`, ['+', '-'])))));
 
   form.append(section('아이템', ...ITEMS.map(([k, label]) => field(label, stepper(k, 7)))));
@@ -369,12 +361,10 @@ function syncAbility(i) {
   const a = abilities[key], skill = abField(i, 'skill');
   const opts = custom ? null : a ? allowed(a.skill) : [];
   skill.hidden = !!opts && opts.length <= 1;
-  // 지정특기 후보만 남김
   for (const o of skill.options) o.hidden = !!opts && !!o.value && !opts.includes(o.value);
   for (const g of skill.querySelectorAll('optgroup')) g.hidden = [...g.children].every((o) => o.hidden);
 }
 
-// ---------- 상태 / 저장 ----------
 let portraitData = '';
 
 function read() {
@@ -457,15 +447,14 @@ $('#reset').onclick = () => {
 };
 $('#print').onclick = () => window.print();
 
-// ---------- 시작 ----------
 (() => {
-  const packs = Object.entries(loadPacks()).map(([world, abilities]) => ({ world, abilities }));
-  for (const p of packs) {
-    if (!worlds.includes(p.world)) worlds.push(p.world);
-    for (const [k, v] of Object.entries(p.abilities)) {
+  const packs = loadPacks();
+  worlds = Object.keys(packs);
+  for (const w of worlds) {
+    for (const [k, v] of Object.entries(packs[w])) {
       // 다른 월드세팅에 같은 이름이 있으면 목록 키에 월드세팅을 붙여 구분
-      const key = abilities[k] && abilities[k].world !== p.world ? `${k} (${p.world})` : k;
-      abilities[key] = { name: k, ...v, world: p.world };
+      const key = abilities[k] && abilities[k].world !== w ? `${k} (${w})` : k;
+      abilities[key] = { name: k, ...v, world: w };
     }
   }
   build();
