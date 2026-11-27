@@ -26,7 +26,7 @@
   h2 .sub button, h2 .sub .btn { height: auto }
 
   input, select, textarea, button, .btn { font: inherit; color: inherit }
-  input:not([type=checkbox]), select, textarea { width: 100%; min-width: 0; height: 32px; padding: 0 2px;
+  input:not([type=checkbox], [type=radio]), select, textarea { width: 100%; min-width: 0; height: 32px; padding: 0 2px;
     background: transparent; border: 0; border-bottom: 1px solid #d4d4d4; border-radius: 0 }
   textarea { height: auto; padding: 6px 8px; border: 1px solid #d4d4d4; resize: vertical }
   input::placeholder, textarea::placeholder { color: var(--mute) }
@@ -45,21 +45,21 @@
   .f:has(textarea) { align-items: start }
   .f:has(textarea) > span { padding-top: 6px }
   .row { display: flex; gap: 14px; align-items: center }
-  .hint { color: var(--mute); font-size: 13px }
+  .hint { margin-left: auto; color: var(--mute); font-size: 13px }
 
   .chip { position: relative; gap: 0; color: var(--sub); cursor: pointer; white-space: nowrap; user-select: none }
   .chip:hover { color: var(--fg) }
-  .chip input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none }
+  .chip input { position: absolute; inset: 0; opacity: 0; pointer-events: none }
   .chip::before { content: "○"; margin-right: 3px; font-size: .8em }
   .chip:has(:checked) { color: var(--fg); font-weight: 700 }
   .chip:has(:checked)::before { content: "●" }
   .chip:has(:focus-visible) { outline: 1px solid var(--fg) }
   .gauge { display: flex; justify-content: space-between; font-family: "Nanum Myeongjo", serif; font-size: 15px }
-  .gauge .chip { justify-content: center; width: 26px; height: 26px; border-radius: 50%; color: var(--sub) }
+  .gauge .chip { justify-content: center; width: 26px; height: 26px; border-radius: 50% }
   .gauge .chip::before { content: none }
   .gauge .chip:has(:checked) { color: #fff; background: var(--fg) }
   .stepper { display: flex; align-items: center }
-  .stepper input { width: 44px !important; border: 0 !important; text-align: center; font-size: 16px; -moz-appearance: textfield }
+  .stepper input { width: 44px; border: 0; text-align: center; font-size: 16px; -moz-appearance: textfield }
   .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0 }
   .stepper button { flex: none; justify-content: center; width: 30px; height: 30px; font-size: 18px; text-decoration: none;
     border: 1px solid #d4d4d4; border-radius: 2px }

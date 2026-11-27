@@ -84,7 +84,7 @@ function wrapLines(s, w) {
 // 세 줄 이상이면 줄 간격을 좁혀 글씨를 덜 줄임
 const lhf = (lines) => (lines.length > 2 ? 1 : 1.15);
 
-function fitText(s, x, y, w, h, max = 20, min = 9, top = false, center = false, bold = false, font = `${bold ? 'bold ' : ''}{}px ${FONT}`) {
+function fitText(s, x, y, w, h, max = 20, min = 9, top = false, center = false, font = `{}px ${FONT}`) {
   if (!s) return;
   let size = max, lines;
   for (; size >= min; size--) {
@@ -107,10 +107,10 @@ function ellipse(x, y, rx, ry) {
 }
 
 // 시트에 인쇄된 별과 같은 9각 별 (꼭짓점 하나가 아래)
-function star(x, y, r, n = 9) {
+function star(x, y, r) {
   ctx.beginPath();
-  for (let i = 0; i < n * 2; i++) {
-    const a = (Math.PI / n) * i + Math.PI / 2, rr = i % 2 ? r * 0.6 : r;
+  for (let i = 0; i < 18; i++) {
+    const a = (Math.PI / 9) * i + Math.PI / 2, rr = i % 2 ? r * 0.6 : r;
     ctx.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a));
   }
   ctx.fill();
@@ -148,7 +148,7 @@ function drawRenames() {
       ctx.fillStyle = '#fff';
       ctx.fillRect(l, 80, r - l, 46);
       ctx.fillStyle = '#000';
-      fitText(rn[cat], l + 4, 82, r - l - 4, 42, 44, 20, false, false, false, HEAD_FONT);
+      fitText(rn[cat], l + 4, 82, r - l - 4, 42, 44, 20, false, false, HEAD_FONT);
     }
     SKILLS[c].forEach((name, i) => {
       if (!rn[name]) return;
@@ -214,7 +214,7 @@ function draw() {
 
   drawSkill(d.basic_skill, BASIC_ATTACK_Y);
   AB_Y.forEach((y, i) => {
-    fitText(d[`ab${i}_name`], AB_COL.name + 5, y - 18, 285, 40, 32, 14, false, false, true);
+    fitText(d[`ab${i}_name`], AB_COL.name + 5, y - 18, 285, 40, 32, 14, false, false, `bold {}px ${FONT}`);
     const t = TYPES[d[`ab${i}_type`]];
     if (t) ellipse(t[0], y + 4, t[1], 15);
     drawSkill(d[`ab${i}_skill`], y);
@@ -266,7 +266,8 @@ function build() {
   const worldBox = h('div', { className: 'worlds' }, ...worlds.map((w) => {
     const cb = input(`world_${w}`, { type: 'checkbox' });
     cb.defaultChecked = w === worlds[0];
-    cb.onchange = () => { applyRename(); AB_Y.forEach((_, i) => refreshPick(i)); update(); };
+    // form.oninput 보다 먼저 실행되어, 바뀐 이름으로 그려짐
+    cb.oninput = () => { applyRename(); AB_Y.forEach((_, i) => refreshPick(i)); };
     return h('label', { className: 'chip' }, cb, w);
   }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 불러오거나 아래에서 직접 입력하세요.');
   const customIn = input('', { type: 'file', multiple: true, hidden: true });
@@ -303,14 +304,14 @@ function build() {
   portraitIn.onchange = () => loadPortrait(portraitIn.files[0]);
   form.append(section('이미지', h('div', { className: 'row' },
     h('label', { className: 'btn' }, portraitIn, '파일 선택'),
-    h('button', { type: 'button', onclick: () => setPortrait('') }, '삭제'),
+    h('button', { type: 'button', id: 'portrait-del', hidden: true, onclick: () => setPortrait('') }, '삭제'),
     h('span', { className: 'hint' }, '1:1 비율 권장'))));
 
   const grid = h('table', { className: 'skills' }, h('tr', {}, ...CATS.map((c) => h('th', { 'data-k': c }, c))));
   SKILLS[0].forEach((_, i) => grid.append(h('tr', {}, ...CATS.map((_, c) =>
     h('td', {}, h('label', { className: 'chip' }, input(`sk_${c}_${i}`, { type: 'checkbox' }), h('span', { 'data-k': SKILLS[c][i] })))))));
   const mark = h('div', { className: 'row' },
-    radio('skill_mark', 'circle', '이름에 동그라미', true), radio('skill_mark', 'fill', '칸 색칠'));
+    radio('skill_mark', 'circle', '동그라미', true), radio('skill_mark', 'fill', '색칠'));
   form.append(section('특기', field('습득 표시', mark), grid,
     field('호기심', h('select', { name: 'curiosity' }, new Option('-', ''), ...CATS.map(opt))),
     field('공포심', skillSelect('fear'))));
@@ -336,14 +337,14 @@ function build() {
         h('textarea', { name: `ab${i}_effect`, placeholder: '효과', rows: 2 }));
     })));
 
+  form.append(section('아이템', ...ITEMS.map(([k, label]) => field(label, stepper(k, 7)))));
+
   form.append(section('인물란', ...PEOPLE_Y.map((_, i) => h('div', { className: 'row person' },
     input(`p${i}_name`, { placeholder: '이름' }),
     h('label', { className: 'chip' }, input(`p${i}_home`, { type: 'checkbox' }), '거처'),
     h('label', { className: 'chip' }, input(`p${i}_secret`, { type: 'checkbox' }), '비밀'),
     input(`p${i}_emo`, { placeholder: '감정', className: 'emo' }),
     select(`p${i}_sign`, ['+', '-'])))));
-
-  form.append(section('아이템', ...ITEMS.map(([k, label]) => field(label, stepper(k, 7)))));
 
   form.append(section('기타',
     field('MEMO', h('textarea', { name: 'memo', rows: 4 })),
@@ -352,7 +353,7 @@ function build() {
 
 const CUSTOM = '__custom';
 const abField = (i, n) => form.elements[`ab${i}_${n}`];
-const worldOf = (key) => abilities[key]?.world || worlds[0];
+const worldOf = (key) => abilities[key].world;
 // 지정특기 표기: 특기명 / 분야명(그 분야 아무거나) / 임의 / 없음, 쉼표로 여러 개
 // 바뀐 이름으로 적힌 지정특기는 원래 이름으로 되돌림
 const orig = (t) => Object.values(renames).flatMap(Object.entries).find(([, v]) => v === t)?.[0] || t;
@@ -377,16 +378,15 @@ function refreshPick(i, keep = abField(i, 'pick').value) {
 
 // 목록에서 고르면 값만 채우고 입력창은 숨김. '직접 입력'이면 모두 보임 (직전 값 유지)
 function fillAbility(i, key) {
-  const a = abilities[key];
+  const a = abilities[key], opts = a ? allowed(a.skill) : [];
   if (key !== CUSTOM) {
     abField(i, 'name').value = a ? a.name || key : '';
     abField(i, 'type').value = a?.type || '';
-    const opts = a ? allowed(a.skill) : [];
     abField(i, 'skill').value = opts.length === 1 ? opts[0] : '';
     abField(i, 'effect').value = a?.effect || '';
   }
   syncAbility(i);
-  if ((a && allowed(a.skill).length > 1) || key === CUSTOM) abField(i, key === CUSTOM ? 'name' : 'skill').focus();
+  if (opts.length > 1 || key === CUSTOM) abField(i, key === CUSTOM ? 'name' : 'skill').focus();
   update();
 }
 
@@ -440,6 +440,7 @@ function update() {
 function setPortrait(src) {
   portraitData = src;
   portrait.src = src;
+  $('#portrait-del').hidden = !src;
   update();
 }
 
@@ -481,7 +482,6 @@ $('#import').onchange = async (e) => {
   const f = e.target.files[0];
   if (f) try { write(JSON.parse(await f.text())); } catch { alert('시트 파일(JSON)이 아닙니다.'); }
   e.target.value = '';
-  update();
 };
 $('#reset').onclick = () => {
   if (!confirm('모든 입력을 지울까요?')) return;
@@ -496,8 +496,7 @@ $('#print').onclick = () => window.print();
   const packs = loadPacks();
   worlds = Object.keys(packs);
   for (const w of worlds) {
-    // 예전 형식 {월드세팅: 어빌리티} 도 읽음
-    const p = packs[w].abilities ? packs[w] : { abilities: packs[w] };
+    const p = packs[w];
     renames[w] = p.rename || {};
     for (const [k, v] of Object.entries(p.abilities)) {
       // 다른 월드세팅에 같은 이름이 있으면 목록 키에 월드세팅을 붙여 구분
@@ -511,6 +510,5 @@ $('#print').onclick = () => window.print();
   bg.src = 'sheet.jpg';
   const saved = localStorage.getItem(KEY);
   if (saved) write(JSON.parse(saved));
-  else { applyRename(); AB_Y.forEach((_, i) => refreshPick(i, '')); }
-  draw();
+  else { applyRename(); AB_Y.forEach((_, i) => refreshPick(i, '')); draw(); }
 })();
