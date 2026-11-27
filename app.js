@@ -76,15 +76,18 @@ function wrapLines(s, w) {
 }
 
 // 박스에 맞을 때까지 글자 크기를 줄여서 그림
-function fitText(s, x, y, w, h, max = 20, min = 9, top = false, center = false) {
+// 세 줄 이상이면 줄 간격을 좁혀 글씨를 덜 줄임
+const lhf = (lines) => (lines.length > 2 ? 1 : 1.15);
+
+function fitText(s, x, y, w, h, max = 20, min = 9, top = false, center = false, bold = false) {
   if (!s) return;
   let size = max, lines;
   for (; size >= min; size--) {
-    ctx.font = `${size}px ${FONT}`;
+    ctx.font = `${bold ? 'bold ' : ''}${size}px ${FONT}`;
     lines = wrapLines(s, w);
-    if (lines.length * size * 1.2 <= h) break;
+    if (lines.length * size * lhf(lines) <= h) break;
   }
-  const lh = size * 1.2;
+  const lh = size * lhf(lines);
   if (!top) y += Math.max(0, (h - lines.length * lh) / 2);
   ctx.textBaseline = 'top';
   ctx.textAlign = center ? 'center' : 'left';
@@ -123,7 +126,8 @@ function ensureFont(d) {
     .filter((ch) => !loadedChars.has(ch));
   if (!chars.length || !document.fonts) return;
   chars.forEach((ch) => loadedChars.add(ch));
-  document.fonts.load(`20px ${FONT}`, chars.join('')).then(draw, () => {});
+  const text = chars.join('');
+  Promise.all([document.fonts.load(`20px ${FONT}`, text), document.fonts.load(`bold 20px ${FONT}`, text)]).then(draw, () => {});
 }
 
 function drawSkill(s, y) {
@@ -182,11 +186,13 @@ function draw() {
 
   drawSkill(d.basic_skill, BASIC_ATTACK_Y);
   AB_Y.forEach((y, i) => {
-    fitText(d[`ab${i}_name`], AB_COL.name + 5, y - 17, 270, 38, 26, 14);
+    // 인쇄된 '기본공격'(약 32px)과 같은 크기, 굵게
+    fitText(d[`ab${i}_name`], AB_COL.name + 5, y - 18, 285, 40, 32, 14, false, false, true);
     const t = TYPES[d[`ab${i}_type`]];
     if (t) ellipse(t[0], y + 4, t[1], 15);
     drawSkill(d[`ab${i}_skill`], y);
-    fitText(d[`ab${i}_effect`], AB_COL.effect, y - 16, 515, 37, 18);
+    // 칸 경계(가로 1389~1932, 세로 줄 사이)에서 여백 2px
+    fitText(d[`ab${i}_effect`], AB_COL.effect + 2, y - 18, 530, 40, 18);
   });
 
   PEOPLE_Y.forEach((y, i) => {
@@ -213,8 +219,21 @@ const h = (tag, attrs = {}, ...kids) => {
 };
 const input = (name, attrs = {}) => h('input', { name, ...attrs });
 const select = (name, opts) => h('select', { name }, ...['', ...opts].map((o) => new Option(o || '-', o)));
-const field = (label, el) => h('label', {}, label, el);
-const section = (title, ...kids) => h('fieldset', {}, h('legend', {}, title), ...kids);
+const radio = (name, value, label, checked) => {
+  const el = input(name, { type: 'radio', value });
+  el.defaultChecked = !!checked;
+  return h('label', { className: 'chip' }, el, label);
+};
+// − 값 + 버튼으로 증감
+const stepper = (name, max) => {
+  const el = input(name, { type: 'number', min: 0, max });
+  const step = (d) => { el.value = Math.min(max, Math.max(0, (+el.value || 0) + d)) || ''; update(); };
+  return h('div', { className: 'stepper' },
+    h('button', { type: 'button', onclick: () => step(-1) }, '−'), el,
+    h('button', { type: 'button', onclick: () => step(1) }, '+'));
+};
+const field = (label, el) => h('label', { className: 'f' }, h('span', {}, label), el);
+const section = (title, ...kids) => h('section', {}, h('h2', {}, title), ...kids);
 // 분야별로 묶은 특기 드롭다운
 const skillSelect = (name, empty = '-', ...extra) => h('select', { name }, new Option(empty, ''), ...extra.map((o) => new Option(o)),
   ...CATS.map((c, i) => h('optgroup', { label: c }, ...SKILLS[i].map((s) => new Option(s)))));
@@ -225,7 +244,7 @@ function build() {
     cb.defaultChecked = w === worlds[0];
     cb.onchange = () => AB_Y.forEach((_, i) => refreshPick(i));
     return h('label', {}, cb, w);
-  }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 아래에서 불러오거나 직접 입력하세요.');
+  }), worlds.length ? '' : '어빌리티 데이터가 없습니다. 불러오거나 아래에서 직접 입력하세요.');
   const customIn = input('', { type: 'file', accept: '.json', multiple: true, hidden: true });
   customIn.onchange = async () => {
     const stored = loadPacks();
@@ -242,55 +261,64 @@ function build() {
     } catch (e) { alert(`형식이 올바르지 않습니다: ${e}\n템플릿을 참고해 주세요.`); }
     customIn.value = '';
   };
-  form.append(section('월드세팅', worldBox, h('div', { className: 'row' },
-    h('label', {}, customIn, h('u', {}, '데이터 불러오기')),
-    h('button', { type: 'button', onclick: () => download(TEMPLATE, 'world-template.json') }, '템플릿'),
-    h('button', { type: 'button', hidden: !localStorage.getItem(CUSTOM_KEY), onclick: () => {
-      if (!confirm('불러온 월드세팅/어빌리티를 모두 삭제할까요?')) return;
-      localStorage.removeItem(CUSTOM_KEY);
-      location.reload();
-    } }, '데이터 삭제'))));
+  const has = worlds.length > 0;
+  const upload = h('label', { className: 'btn' }, customIn, has ? '추가' : '어빌리티 데이터 불러오기');
+  const clear = h('button', { type: 'button', onclick: () => {
+    if (!confirm('불러온 월드세팅/어빌리티를 모두 삭제할까요?')) return;
+    localStorage.removeItem(CUSTOM_KEY);
+    location.reload();
+  } }, '삭제');
+  const template = h('button', { type: 'button', onclick: () => download(TEMPLATE, 'world-template.json') }, '템플릿');
+  form.append(has
+    ? h('section', {}, h('h2', { className: 'head' }, '월드세팅', h('span', { className: 'sub' }, upload, ' · ', clear)), worldBox)
+    : section('월드세팅', worldBox, h('div', { className: 'row' }, upload, template)));
 
   form.append(section('기본', ...BASIC.map((f) => field(f.label, input(f.k)))));
 
-  const portraitIn = input('', { type: 'file', accept: 'image/*' });
+  const portraitIn = input('', { type: 'file', accept: 'image/*', hidden: true });
   portraitIn.onchange = () => loadPortrait(portraitIn.files[0]);
-  form.append(section('초상화', portraitIn, h('button', { type: 'button', onclick: () => setPortrait('') }, '삭제')));
+  form.append(section('초상화', h('div', { className: 'row' },
+    h('label', { className: 'btn' }, portraitIn, '이미지 선택'),
+    h('button', { type: 'button', onclick: () => setPortrait('') }, '삭제'))));
 
   const grid = h('table', { className: 'skills' }, h('tr', {}, ...CATS.map((c) => h('th', {}, c))));
   SKILLS[0].forEach((_, i) => grid.append(h('tr', {}, ...CATS.map((_, c) =>
-    h('td', {}, h('label', {}, input(`sk_${c}_${i}`, { type: 'checkbox' }), SKILLS[c][i]))))));
-  const mark = h('select', { name: 'skill_mark' },
-    new Option('특기 이름에 동그라미', 'circle'), new Option('특기 칸 색칠', 'fill'));
+    h('td', {}, h('label', { className: 'chip' }, input(`sk_${c}_${i}`, { type: 'checkbox' }), SKILLS[c][i]))))));
+  const mark = h('div', { className: 'row' },
+    radio('skill_mark', 'circle', '이름에 동그라미', true), radio('skill_mark', 'fill', '칸 색칠'));
   form.append(section('특기', field('습득 표시', mark), grid,
     field('호기심', select('curiosity', CATS)),
     field('공포심', skillSelect('fear'))));
 
-  form.append(section('생명력 / 이성치',
-    field('생명력', input('hp', { type: 'number', min: 0, max: 12 })),
-    field('이성치', input('san', { type: 'number', min: 0, max: 12 }))));
+  // 다시 누르면 선택 해제
+  const gauge = (name) => h('div', { className: 'gauge' }, ...Array.from({ length: 12 }, (_, i) => {
+    const l = radio(name, String(i + 1), i + 1), el = l.firstChild;
+    el.onpointerdown = () => (el.was = el.checked);
+    el.onclick = () => { if (el.was) { el.checked = el.was = false; update(); } };
+    return l;
+  }));
+  form.append(section('생명력 / 이성치', field('생명력', gauge('hp')), field('이성치', gauge('san'))));
 
   form.append(section('어빌리티',
-    field('기본공격 지정특기', skillSelect('basic_skill')),
+    field('기본공격', skillSelect('basic_skill', '지정특기')),
     ...AB_Y.map((_, i) => {
       const pick = h('select', { name: `ab${i}_pick` });
       pick.onchange = () => fillAbility(i, pick.value);
-      return h('div', { className: 'ab' }, pick,
+      return h('div', { className: 'ab', 'data-n': i + 1 }, pick,
         skillSelect(`ab${i}_skill`, '지정특기', '없음'),
         input(`ab${i}_name`, { placeholder: '이름' }),
         select(`ab${i}_type`, Object.keys(TYPES)),
         h('textarea', { name: `ab${i}_effect`, placeholder: '효과', rows: 2 }));
     })));
 
-  form.append(section('인물란', ...PEOPLE_Y.map((_, i) => h('div', { className: 'row' },
+  form.append(section('인물란', ...PEOPLE_Y.map((_, i) => h('div', { className: 'row person' },
     input(`p${i}_name`, { placeholder: '이름' }),
-    h('label', {}, input(`p${i}_home`, { type: 'checkbox' }), '거처'),
-    h('label', {}, input(`p${i}_secret`, { type: 'checkbox' }), '비밀'),
+    h('label', { className: 'chip' }, input(`p${i}_home`, { type: 'checkbox' }), '거처'),
+    h('label', { className: 'chip' }, input(`p${i}_secret`, { type: 'checkbox' }), '비밀'),
     input(`p${i}_emo`, { placeholder: '감정', size: 6 }),
     select(`p${i}_sign`, ['+', '-'])))));
 
-  form.append(section('아이템', ...ITEMS.map(([k, label]) =>
-    field(label, input(k, { type: 'number', min: 0, max: 7 })))));
+  form.append(section('아이템', ...ITEMS.map(([k, label]) => field(label, stepper(k, 7)))));
 
   form.append(section('기타',
     field('MEMO', h('textarea', { name: 'memo', rows: 4 })),
@@ -353,7 +381,8 @@ function read() {
   const d = { portrait: portraitData };
   for (const el of form.elements) {
     if (!el.name) continue;
-    d[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.type === 'radio') d[el.name] = form.elements[el.name].value;
+    else d[el.name] = el.type === 'checkbox' ? el.checked : el.value;
   }
   return d;
 }
@@ -361,7 +390,8 @@ function read() {
 function write(d) {
   for (const el of form.elements) {
     if (!el.name || !(el.name in d)) continue;
-    if (el.type === 'checkbox') el.checked = !!d[el.name];
+    if (el.type === 'radio') el.checked = String(d[el.name]) === el.value;
+    else if (el.type === 'checkbox') el.checked = !!d[el.name];
     else el.value = d[el.name];
   }
   AB_Y.forEach((_, i) => {
